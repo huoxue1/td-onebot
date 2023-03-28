@@ -3,9 +3,10 @@ package main
 import (
 	"flag"
 	nested "github.com/Lyrics-you/sail-logrus-formatter/sailor"
+	"github.com/huoxue1/td-onebot/internal/cache"
+	"github.com/huoxue1/td-onebot/internal/conf"
+	"github.com/huoxue1/td-onebot/lib"
 	log "github.com/sirupsen/logrus"
-	"td-onebot/conf"
-	"td-onebot/lib"
 )
 
 var (
@@ -36,5 +37,10 @@ func init() {
 }
 
 func main() {
+	err := cache.InitCache(conf.GetConfig())
+	if err != nil {
+		log.Errorln("init cache error : " + err.Error())
+		return
+	}
 	lib.Init()
 }

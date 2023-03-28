@@ -1,16 +1,22 @@
 package lib
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
 	"github.com/botuniverse/go-libonebot"
+	"github.com/google/uuid"
 	"github.com/gotd/td/telegram"
 	"github.com/gotd/td/tg"
+	"github.com/huoxue1/td-onebot/internal/cache"
+	"github.com/huoxue1/td-onebot/internal/conf"
+	"github.com/huoxue1/td-onebot/utils"
+	data2 "github.com/huoxue1/td-onebot/utils/const"
 	log "github.com/sirupsen/logrus"
+	"os"
+	"path/filepath"
 	"strings"
-	"td-onebot/models"
-	"td-onebot/utils"
 )
 
 type Bot struct {
@@ -18,7 +24,8 @@ type Bot struct {
 	Ob     *libonebot.OneBot
 	Client *telegram.Client
 	ctx    context.Context
-	config map[string]any
+	config *conf.Config
+	cache  cache.Client
 }
 
 func handleApi(bot *Bot) {
@@ -31,18 +38,157 @@ func handleApi(bot *Bot) {
 
 	mux.HandleFunc(libonebot.ActionDeleteMessage, bot.DeleteMsg)
 
-	mux.HandleFunc(libonebot.ActionGetSupportedActions, bot.GetSupportActions)
+	mux.HandleFunc(libonebot.ActionGetFile, bot.GetFile())
+
+	mux.HandleFunc(libonebot.ActionGetUserInfo, bot.GetUserInfo())
+
+	mux.HandleFunc(libonebot.ActionGetGroupInfo, bot.GetGroupInfo())
+	mux.HandleFunc(data2.ExtendActionEditMessage, bot.EditMessage)
+	mux.HandleFunc(data2.ExtendActionGetDialogs, bot.GetDialogs())
 
 }
 
-func (b *Bot) GetSupportActions(writer libonebot.ResponseWriter, req *libonebot.Request) {
-	writer.WriteData([]string{
-		libonebot.ActionSendMessage,
-		libonebot.ActionUploadFile,
-		libonebot.ActionDeleteMessage,
-		libonebot.ActionGetSupportedActions,
-	})
+func (b *Bot) GetGroupInfo() libonebot.HandlerFunc {
+	return func(writer libonebot.ResponseWriter, request *libonebot.Request) {
+		id, err := request.Params.GetString("group_id")
+		if err != nil {
+			writer.WriteFailed(libonebot.RetCodeBadParam, err)
+			return
+		}
+		channel := b.getChannel(utils.ToInt64(id))
+		writer.WriteData(map[string]any{
+			"group_id":    utils.ToString(channel.GetID()),
+			"group_name":  utils.ToString(channel.Username),
+			"access_hash": utils.ToString(channel.AccessHash),
+			"raw":         channel,
+		})
+	}
+}
 
+func (b *Bot) GetUserInfo() libonebot.HandlerFunc {
+	return func(writer libonebot.ResponseWriter, request *libonebot.Request) {
+		id, err := request.Params.GetString("user_id")
+		if err != nil {
+			writer.WriteFailed(libonebot.RetCodeBadParam, err)
+			return
+		}
+		info, err := b.getUserInfo(utils.ToInt64(id))
+		if err != nil {
+			writer.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
+			return
+		}
+		writer.WriteData(map[string]any{
+			"user_id":          utils.ToString(info.ID),
+			"user_name":        info.Username,
+			"is_bot":           info.GetBot(),
+			"phone":            info.Phone,
+			"status":           info.Status,
+			"user_displayname": "",
+			"user_remark":      "",
+		})
+	}
+}
+
+func (b *Bot) GetFile() libonebot.HandlerFunc {
+	return func(writer libonebot.ResponseWriter, request *libonebot.Request) {
+		id, err := request.Params.GetString("file_id")
+		if err != nil {
+			writer.WriteFailed(libonebot.RetCodeBadParam, err)
+			return
+		}
+		fileId, err := utils.ParseFieldId(id)
+		if err != nil {
+			writer.WriteFailed(libonebot.RetCodeBadParam, err)
+			return
+		}
+		dowType, err := request.Params.GetString("type")
+		if err != nil {
+			writer.WriteFailed(libonebot.RetCodeBadParam, err)
+			return
+		}
+		thumbSize, _ := request.Params.GetString("thumb_size")
+		builder, err := b.getFile(fileId, thumbSize)
+		if err != nil {
+			writer.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
+			return
+		}
+		switch dowType {
+		case "path":
+			if p := b.cache.Get(data2.CacheFile + id); p != "" {
+				writer.WriteData(map[string]any{"name": filepath.Base(p), "path": p})
+				return
+			}
+			_ = os.Mkdir(filepath.Join(b.config.Cache.CacheDir, "files"), 0644)
+			u := uuid.New()
+			abs, err := filepath.Abs(filepath.Join(b.config.Cache.CacheDir, "files", u.String()))
+			if err != nil {
+				writer.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
+				return
+			}
+			_, err = builder.ToPath(b.ctx, abs)
+			if err != nil {
+				writer.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
+				return
+			}
+			_ = b.cache.Set(data2.CacheFile+id, abs)
+			writer.WriteData(map[string]any{"name": u, "path": abs})
+		case "data":
+			var buffer []byte
+			buf := bytes.NewBuffer(buffer)
+			_, err = builder.Stream(b.ctx, buf)
+			if err != nil {
+				writer.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
+				return
+			}
+			writer.WriteData(map[string]any{"name": "", "path": buf.Bytes()})
+		default:
+			writer.WriteFailed(libonebot.RetCodeUnsupportedParam, errors.New("unSupport the type "+dowType))
+		}
+
+	}
+}
+
+func (b *Bot) GetDialogs() libonebot.HandlerFunc {
+	return func(writer libonebot.ResponseWriter, request *libonebot.Request) {
+		limit, _ := request.Params.GetInt64("limit")
+		if limit == 0 {
+			limit = 100
+		}
+		dialogs, err := b.getDialogs(int(limit))
+		if err != nil {
+			writer.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
+			return
+		}
+		writer.WriteData(dialogs)
+	}
+}
+
+func (b *Bot) EditMessage(resp libonebot.ResponseWriter, req *libonebot.Request) {
+	id, err := req.Params.GetString("message_id")
+	if err != nil {
+		resp.WriteFailed(libonebot.RetCodeBadParam, err)
+		return
+	}
+	messageId, err := utils.ParseMessageId(id)
+	if err != nil {
+		resp.WriteFailed(libonebot.RetCodeBadParam, err)
+		return
+	}
+	msg, err := req.Params.GetString("message")
+	if err != nil || msg == "" {
+		resp.WriteFailed(libonebot.RetCodeBadParam, err)
+		return
+	}
+	if len(messageId) > 1 {
+		// TODO
+	} else {
+		err := b.editMessage(messageId[0], msg)
+		if err != nil {
+			resp.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
+			return
+		}
+	}
+	resp.WriteOK()
 }
 
 func (b *Bot) DeleteMsg(resp libonebot.ResponseWriter, req *libonebot.Request) {
@@ -51,32 +197,45 @@ func (b *Bot) DeleteMsg(resp libonebot.ResponseWriter, req *libonebot.Request) {
 		resp.WriteFailed(libonebot.RetCodeBadParam, err)
 		return
 	}
-	messageId, err := models.ParseMessageId(id)
+	messageId, err := utils.ParseMessageId(id)
 	if err != nil {
 		resp.WriteFailed(libonebot.RetCodeBadParam, err)
 		return
 	}
-	var err1 error
-	for _, s := range messageId {
-		err1 = b.deleteMsg(s)
+	if len(messageId) == 0 {
+		resp.WriteFailed(libonebot.RetCodeBadParam, err)
+		return
 	}
-	if err1 != nil {
-		resp.WriteFailed(libonebot.RetCodeInternalHandlerError, err1)
+	var ids []int
+	var channeldId int64
+	if strings.Contains(messageId[0], "_") {
+		channeldId = utils.ToInt64(strings.Split(messageId[0], "_")[1])
+		for _, s := range messageId {
+			ids = append(ids, utils.ToInt(strings.Split(s, "_")[0]))
+		}
+	} else {
+		for _, s := range messageId {
+			ids = append(ids, utils.ToInt(s))
+		}
+	}
+	err = b.deleteMsg(ids, channeldId)
+	if err != nil {
+		resp.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
 		return
 	}
 	resp.WriteOK()
 
 }
 
-func (b *Bot) deleteMsg(id string) error {
-	if strings.Contains(id, "_") {
-		channel := b.getChannel(utils.ToInt64(strings.Split(id, "_")[1]))
+func (b *Bot) deleteMsg(ids []int, channelId int64) error {
+	if channelId != 0 {
+		channel := b.getChannel(channelId)
 		_, err := b.Client.API().ChannelsDeleteMessages(b.ctx, &tg.ChannelsDeleteMessagesRequest{
 			Channel: &tg.InputChannel{
 				ChannelID:  channel.ID,
 				AccessHash: channel.AccessHash,
 			},
-			ID: []int{utils.ToInt(strings.Split(id, "_")[0])},
+			ID: ids,
 		})
 		if err != nil {
 			return err
@@ -84,7 +243,7 @@ func (b *Bot) deleteMsg(id string) error {
 	} else {
 		_, err := b.Client.API().MessagesDeleteMessages(b.ctx, &tg.MessagesDeleteMessagesRequest{
 			Revoke: true,
-			ID:     []int{utils.ToInt(id)},
+			ID:     ids,
 		})
 		if err != nil {
 			return err
@@ -139,6 +298,7 @@ func (b *Bot) UploadFile(resp libonebot.ResponseWriter, req *libonebot.Request) 
 	}
 
 	uploadId.FileName = name
+
 	resp.WriteData(map[string]string{"file_id": uploadId.String()})
 }
 
@@ -161,7 +321,7 @@ func (b *Bot) SendMessage(resp libonebot.ResponseWriter, req *libonebot.Request)
 			resp.WriteFailed(libonebot.RetCodeBadParam, err)
 			return
 		}
-		messageId, err := b.sendMessage(detailType, utils.ToInt64(userId), 0, msg)
+		messageId, err := b.sendMessageCustom(detailType, utils.ToInt64(userId), 0, msg)
 		if err != nil {
 			resp.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
 			return
@@ -173,7 +333,7 @@ func (b *Bot) SendMessage(resp libonebot.ResponseWriter, req *libonebot.Request)
 			resp.WriteFailed(libonebot.RetCodeBadParam, err)
 			return
 		}
-		messageId, err := b.sendMessage(detailType, 0, utils.ToInt64(groupId), msg)
+		messageId, err := b.sendMessageCustom(detailType, 0, utils.ToInt64(groupId), msg)
 		if err != nil {
 			resp.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
 			return

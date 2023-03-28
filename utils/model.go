@@ -1,21 +1,21 @@
-package models
+package utils
 
 import (
 	"encoding/base64"
 	"encoding/json"
+	"github.com/gotd/td/fileid"
 	"github.com/gotd/td/tg"
 	log "github.com/sirupsen/logrus"
-	"td-onebot/utils"
 )
 
 type FileId struct {
-	Id            int64        `json:"id"`
-	AccessHash    int64        `json:"access_hash"`
-	FileReference []byte       `json:"file_reference"`
-	PeerId        tg.PeerClass `json:"peer_id"`
-	FromId        tg.PeerClass `json:"from_id"`
-	MsgId         int          `json:"msg_id"`
-	MessageType   string       `json:"message_type"`
+	UploadId
+	fileid.FileID
+	Type        string `json:"type,omitempty"`
+	FileType    string `json:"file_type,omitempty"`
+	MsgId       int    `json:"msg_id,omitempty"`
+	MessageType string `json:"message_type,omitempty"`
+	ChannelId   int64  `json:"channel_id,omitempty"`
 }
 
 func (f *FileId) String() string {
@@ -42,7 +42,7 @@ type UploadId struct {
 }
 
 func (u *UploadId) String() string {
-	data, err := utils.EncodeObject(u)
+	data, err := EncodeObject(u)
 	if err != nil {
 		log.Errorln(err.Error())
 		return ""
@@ -56,7 +56,7 @@ func ParseUploadId(data string) (*UploadId, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = utils.DecodeObject(content, f)
+	err = DecodeObject(content, f)
 	if err != nil {
 		return nil, err
 	}

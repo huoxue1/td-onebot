@@ -13,6 +13,8 @@ import (
 	"github.com/gotd/td/telegram/updates"
 	"github.com/gotd/td/telegram/updates/hook"
 	"github.com/gotd/td/tg"
+	"github.com/huoxue1/td-onebot/internal/cache"
+	"github.com/huoxue1/td-onebot/internal/conf"
 	log "github.com/sirupsen/logrus"
 	"github.com/skip2/go-qrcode"
 	"go.uber.org/zap"
@@ -25,7 +27,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"td-onebot/conf"
 	"time"
 )
 
@@ -60,7 +61,8 @@ func onConnect(ctx context.Context, client *telegram.Client) {
 		}, &conf.GetConfig().Config),
 		Client: client,
 		ctx:    ctx,
-		config: make(map[string]any, 10),
+		config: conf.GetConfig(),
+		cache:  cache.GetCache(),
 	}
 	bot.Ob.Logger = log.StandardLogger()
 

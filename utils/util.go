@@ -26,6 +26,15 @@ func ToString(data any) string {
 	}
 }
 
+func In[T comparable](ele T, silence []T) bool {
+	for _, a := range silence {
+		if a == ele {
+			return true
+		}
+	}
+	return false
+}
+
 func ToInt(data any) int {
 	switch data.(type) {
 

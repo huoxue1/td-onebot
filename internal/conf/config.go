@@ -32,6 +32,20 @@ type Config struct {
 		LoginType string `json:"login_type" yaml:"login_type" mapstructure:"login_type"`
 	} `json:"auth" mapstructure:"auth" yaml:"auth" toml:"auth"`
 
+	Cache struct {
+		CacheType string `json:"cache_type" yaml:"cache_type" mapstructure:"cache_type"`
+		CacheDir  string `json:"cache_dir" yaml:"cache_dir" mapstructure:"cache_dir"`
+		NutsDB    struct {
+			Dir string `json:"dir" yaml:"dir" mapstructure:"dir"`
+		} `json:"nuts_db" yaml:"nuts_db" mapstructure:"nuts_db"`
+		Redis struct {
+			Host     string `json:"host" yaml:"host" mapstructure:"host"`
+			Port     int    `json:"port" yaml:"port" mapstructure:"port"`
+			Password string `json:"password" yaml:"password" mapstructure:"password"`
+			Db       int    `json:"db" yaml:"db" mapstructure:"db"`
+		} `yaml:"redis" mapstructure:"redis"`
+	} `json:"cache" yaml:"cache" mapstructure:"cache"`
+
 	Proxy string `json:"proxy" yaml:"proxy" mapstructure:"proxy"`
 }
 
@@ -69,6 +83,7 @@ func InitConfig(path string) {
 		log.Errorln(err.Error())
 		return
 	}
+	_ = os.MkdirAll(config.Cache.CacheDir, 0644)
 }
 
 func GetConfig() *Config {

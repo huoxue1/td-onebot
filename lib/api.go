@@ -48,6 +48,18 @@ func handleApi(bot *Bot) {
 
 }
 
+func (b *Bot) GetBotCommand() libonebot.HandlerFunc {
+	return func(writer libonebot.ResponseWriter, request *libonebot.Request) {
+		scope, _ := request.Params.GetString("scope")
+		command, err := b.getCommand(scope)
+		if err != nil {
+			writer.WriteFailed(libonebot.RetCodeInternalHandlerError, err)
+			return
+		}
+		writer.WriteData(command)
+	}
+}
+
 func (b *Bot) GetGroupInfo() libonebot.HandlerFunc {
 	return func(writer libonebot.ResponseWriter, request *libonebot.Request) {
 		id, err := request.Params.GetString("group_id")

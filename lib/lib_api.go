@@ -23,6 +23,36 @@ import (
 	"time"
 )
 
+func getScope(scope string) tg.BotCommandScopeClass {
+	var scopeClass tg.BotCommandScopeClass = &tg.BotCommandScopeDefault{}
+
+	switch scope {
+	case "private":
+		scopeClass = &tg.BotCommandScopeUsers{}
+	case "group":
+		scopeClass = &tg.BotCommandScopeChats{}
+	default:
+
+	}
+
+	return scopeClass
+}
+
+func (b *Bot) setCommand(scope string) {
+
+}
+
+func (b *Bot) getCommand(scope string) ([]tg.BotCommand, error) {
+
+	commands, err := b.Client.API().BotsGetBotCommands(b.ctx, &tg.BotsGetBotCommandsRequest{
+		Scope: getScope(scope),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return commands, err
+}
+
 func (b *Bot) getFile(fileId *utils.FileId, thumbSize string) (*downloader.Builder, error) {
 	if fileId.Type == data2.FileIdTypeUpload {
 		return nil, errors.New("unSupport get the upload file")

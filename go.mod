@@ -2,13 +2,14 @@ module github.com/huoxue1/td-onebot
 
 go 1.18
 
-replace github.com/botuniverse/go-libonebot v0.7.0 => github.com/huoxue1/go-libonebot v0.0.0-20230324033025-d6959b97ee3b
+replace github.com/botuniverse/go-libonebot v0.7.0 => github.com/huoxue1/go-libonebot v0.0.0-20230328110129-3f2c4ed1972a
 
 require (
 	github.com/Baozisoftware/qrcode-terminal-go v0.0.0-20170407111555-c0650d8dff0f
 	github.com/Lyrics-you/sail-logrus-formatter v1.3.1
 	github.com/botuniverse/go-libonebot v0.7.0
 	github.com/go-redis/redis v6.15.9+incompatible
+	github.com/google/uuid v1.3.0
 	github.com/gotd/td v0.79.0
 	github.com/nutsdb/nutsdb v0.12.0
 	github.com/sirupsen/logrus v1.9.0
@@ -28,7 +29,6 @@ require (
 	github.com/go-faster/jx v1.0.0 // indirect
 	github.com/go-faster/xor v0.3.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/gotd/ige v0.2.2 // indirect
 	github.com/gotd/neo v0.1.5 // indirect

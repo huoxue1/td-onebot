@@ -3,6 +3,9 @@ package data
 const (
 	ExtendActionEditMessage = "edit_message"
 	ExtendActionGetDialogs  = "get_dialogs"
+
+	ExtendActionGetBotCommand = "get_bot_command"
+	ExtendActionSetBotCommand = "set_bot_command"
 )
 
 const (
